@@ -8,20 +8,12 @@ due — Windows 桌面提醒应用，Rust + Slint GUI，后台托盘运行，TOM
 
 ## 构建与测试
 
-需要 MSVC 构建工具（Visual Studio Build Tools），编译/测试需在 MSVC 环境下运行：
-
 ```powershell
-# 编译检查
-cmd /c "`"C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat`" x64 && cargo check"
-
-# 运行全部测试
-cmd /c "`"C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat`" x64 && cargo test"
-
-# 运行单个测试
-cmd /c "`"C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat`" x64 && cargo test <test_name>"
-
-# 运行指定模块的测试
-cmd /c "`"C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat`" x64 && cargo test reminder::"
+cargo check          # 编译检查
+cargo test           # 运行全部测试
+cargo test <name>    # 运行单个测试
+cargo test reminder::  # 运行指定模块的测试
+cargo run            # 运行应用
 ```
 
 ## 约束
@@ -35,17 +27,35 @@ cmd /c "`"C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxili
 
 ```
 src/
-├── main.rs          # 入口：加载数据目录，显示提醒列表
-├── config.rs        # AppConfig 模型 + TOML 配置（load_config / save_config / ensure_config_file）
-└── reminder.rs      # Reminder 模型 + TOML 存储（save_reminders / load_reminders / data_dir）
+├── main.rs          # 入口：加载数据，连接 Slint UI 回调，运行事件循环
+├── reminder.rs      # Reminder 模型 + TOML 存储（save_reminders / load_reminders / data_dir）
+├── config.rs        # AppConfig 模型 + TOML 配置
+├── ui.rs            # UI 数据转换（ReminderItem）+ 编辑/添加/删除/保存逻辑
+├── time.rs          # 时间解析（本地/相对/中文）+ 重复触发判断
+├── popup.rs         # 弹窗操作（Dismiss / Snooze / Complete）
+├── notification.rs  # Windows 系统通知（notify-rust）
+└── tray.rs          # 系统托盘（tray-icon + muda 菜单）
+ui/
+└── main.slint       # Slint GUI 定义（主窗口布局、编辑面板、回调声明）
+build.rs             # slint_build::compile("ui/main.slint")
 ```
+
+### 数据流
+
+Reminder 模型 (`reminder.rs`) → UI 转换 (`ui::to_reminder_items`) → Slint 渲染 (`main.slint`)
+用户操作 → Slint 回调 → `ui.rs` 逻辑 → `reminder.rs` 持久化 → 刷新 UI
 
 ### 存储
 
 - 数据目录：`%APPDATA%\due\`（通过 `dirs::data_dir()` 获取）
 - 提醒文件：`reminders.toml`（TOML 格式，`[[reminders]]` 数组）
 - 配置文件：`config.toml`（TOML 格式，首次运行自动生成默认配置）
-- 配置格式：TOML
+
+### Slint UI 注意事项
+
+- Slint 标识符用连字符（`repeat-type-index`），Rust 端自动转为下划线（`repeat_type_index`）
+- `if` 块内声明的 ID 无法从外部访问，需通过 `in-out property` 中转
+- `build.rs` 编译 `ui/main.slint` 生成 Rust 绑定，`slint::include_modules!()` 引入
 
 ### 术语
 
