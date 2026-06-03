@@ -1,5 +1,6 @@
 mod config;
 mod reminder;
+mod time;
 
 fn main() {
     let dir = match reminder::data_dir() {
