@@ -1,0 +1,212 @@
+import { Button, VerticalBox, HorizontalBox, ListView, LineEdit, Switch, ComboBox, ScrollView } from "std-widgets.slint";
+
+struct ReminderItem {
+    id: int,
+    title: string,
+    content: string,
+    enabled: bool,
+    completed: bool,
+    next-trigger: string,
+}
+
+export component MainWindow inherits Window {
+    title: "due";
+    min-width: 800px;
+    min-height: 500px;
+    preferred-width: 960px;
+    preferred-height: 600px;
+    icon: @image-url("");
+
+    callback add-clicked(string, string);
+    callback delete-clicked(int);
+    callback toggle-enabled(int);
+    callback select-reminder(int);
+
+    in-out property <[ReminderItem]> reminders: [];
+    in-out property <int> selected-index: -1;
+    in-out property <string> edit-title: "";
+    in-out property <string> edit-content: "";
+
+    // 暖灰主色调
+    background: #f5f0eb;
+
+    HorizontalLayout {
+        spacing: 0px;
+
+        // 左侧：提醒列表
+        Rectangle {
+            width: 320px;
+            background: #faf7f3;
+            border-width: 0px;
+
+            VerticalLayout {
+                padding: 20px;
+                spacing: 16px;
+
+                // 标题区
+                Text {
+                    text: "due";
+                    font-size: 28px;
+                    font-weight: 700;
+                    color: #3d3530;
+                    horizontal-alignment: left;
+                }
+
+                // 添加提醒
+                HorizontalLayout {
+                    spacing: 8px;
+                    height: 36px;
+
+                    new-title := LineEdit {
+                        placeholder-text: "新提醒标题...";
+                        horizontal-stretch: 1;
+                    }
+
+                    Button {
+                        text: "+";
+                        width: 36px;
+                        clicked => {
+                            if (new-title.text != "") {
+                                root.add-clicked(new-title.text, "");
+                                new-title.text = "";
+                            }
+                        }
+                    }
+                }
+
+                // 提醒列表
+                for item[id] in root.reminders: Rectangle {
+                    height: 56px;
+                    border-radius: 10px;
+                    background: id == root.selected-index ? #fff5ee : transparent;
+
+                    TouchArea {
+                        clicked => {
+                            root.select-reminder(id);
+                        }
+                    }
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 8px;
+                        spacing: 8px;
+                        alignment: stretch;
+
+                        // 状态指示
+                        Rectangle {
+                            width: 8px;
+                            border-radius: 4px;
+                            y: parent.height / 2 - self.height / 2;
+                            height: 24px;
+                            background: item.completed ? #a8b5a0 : (item.enabled ? #e8956a : #c5bfb8);
+                        }
+
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 2px;
+
+                            Text {
+                                text: item.title;
+                                font-size: 14px;
+                                font-weight: 600;
+                                color: item.completed ? #b0a89e : #3d3530;
+                                overflow: elide;
+                            }
+
+                            Text {
+                                text: item.next-trigger;
+                                font-size: 11px;
+                                color: #9e958c;
+                                visible: item.next-trigger != "";
+                            }
+                        }
+
+                        // 启用/禁用
+                        Switch {
+                            checked: item.enabled;
+                            width: 40px;
+                            toggled => {
+                                root.toggle-enabled(id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 右侧：详情编辑
+        Rectangle {
+            background: #ffffff;
+
+            if root.selected-index >= 0 && root.selected-index < root.reminders.length: VerticalLayout {
+                padding: 32px;
+                spacing: 20px;
+
+                Text {
+                    text: "编辑提醒";
+                    font-size: 20px;
+                    font-weight: 700;
+                    color: #3d3530;
+                }
+
+                VerticalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: "标题";
+                        font-size: 12px;
+                        color: #9e958c;
+                    }
+                    LineEdit {
+                        text: root.edit-title;
+                        height: 36px;
+                    }
+                }
+
+                VerticalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: "内容";
+                        font-size: 12px;
+                        color: #9e958c;
+                    }
+                    LineEdit {
+                        text: root.edit-content;
+                        height: 36px;
+                    }
+                }
+
+                Text {
+                    text: root.reminders[root.selected-index].next-trigger;
+                    font-size: 13px;
+                    color: #9e958c;
+                    visible: root.reminders[root.selected-index].next-trigger != "";
+                }
+
+                Rectangle { vertical-stretch: 1; }
+
+                Button {
+                    text: "删除提醒";
+                    clicked => {
+                        root.delete-clicked(root.selected-index);
+                    }
+                }
+            }
+
+            if root.selected-index < 0 || root.selected-index >= root.reminders.length: VerticalLayout {
+                alignment: center;
+                spacing: 8px;
+
+                Text {
+                    text: "选择一个提醒";
+                    font-size: 16px;
+                    color: #c5bfb8;
+                }
+                Text {
+                    text: "或创建新提醒开始";
+                    font-size: 13px;
+                    color: #d9d3cc;
+                }
+            }
+        }
+    }
+}

@@ -1,7 +1,16 @@
+use chrono::{NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 const REMINDERS_FILE: &str = "reminders.toml";
+
+/// 重复间隔
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum RepeatInterval {
+    Minutes(u32),
+    Hours(u32),
+    Days(u32),
+}
 
 pub fn data_dir() -> Result<PathBuf, String> {
     let base = dirs::data_dir().ok_or("Cannot determine AppData directory")?;
@@ -43,6 +52,20 @@ pub struct Reminder {
     pub content: String,
     pub enabled: bool,
     pub completed: bool,
+    #[serde(default)]
+    pub repeat: Option<RepeatInterval>,
+    #[serde(default)]
+    pub start_date: Option<NaiveDate>,
+    #[serde(default)]
+    pub end_date: Option<NaiveDate>,
+    #[serde(default)]
+    pub daily_start: Option<NaiveTime>,
+    #[serde(default)]
+    pub daily_end: Option<NaiveTime>,
+    #[serde(default)]
+    pub repeat_limit: Option<u32>,
+    #[serde(default)]
+    pub repeat_count: u32,
 }
 
 impl Reminder {
@@ -52,6 +75,20 @@ impl Reminder {
             content: content.to_string(),
             enabled: true,
             completed: false,
+            repeat: None,
+            start_date: None,
+            end_date: None,
+            daily_start: None,
+            daily_end: None,
+            repeat_limit: None,
+            repeat_count: 0,
+        }
+    }
+
+    pub fn with_repeat(self, interval: RepeatInterval) -> Self {
+        Self {
+            repeat: Some(interval),
+            ..self
         }
     }
 }
@@ -137,6 +174,13 @@ completed = true
                 content: "周报准备".to_string(),
                 enabled: true,
                 completed: true,
+                repeat: None,
+                start_date: None,
+                end_date: None,
+                daily_start: None,
+                daily_end: None,
+                repeat_limit: None,
+                repeat_count: 0,
             },
         ];
 
@@ -150,5 +194,13 @@ completed = true
 
         // cleanup
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn create_recurring_reminder() {
+        let reminder = Reminder::new("喝水", "每小时喝一杯水")
+            .with_repeat(RepeatInterval::Hours(1));
+
+        assert_eq!(reminder.repeat, Some(RepeatInterval::Hours(1)));
     }
 }
