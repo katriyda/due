@@ -1,4 +1,5 @@
 use chrono::{Duration, NaiveDateTime};
+use log::debug;
 use crate::reminder::{Reminder, RepeatInterval};
 
 /// 计算重复提醒的下次触发时间
@@ -68,10 +69,12 @@ pub fn advance_next_trigger(reminder: &mut Reminder, now: &NaiveDateTime) {
         None => return,
     };
 
+    let old_next = next;
     let mut next = next;
     while next <= *now {
         next = next_trigger_time(&interval, &next);
     }
+    debug!("推进提醒触发时间: {}，从 {} 到 {}", reminder.title, old_next, next);
     reminder.next_trigger = Some(next);
 }
 

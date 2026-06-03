@@ -1,14 +1,25 @@
+use log::{debug, error};
+
 /// 发送系统通知
 pub fn send(title: &str, content: &str) -> Result<(), String> {
     if title.trim().is_empty() {
         return Err("通知标题不能为空".to_string());
     }
-    notify_rust::Notification::new()
+    match notify_rust::Notification::new()
         .summary(title)
         .body(content)
         .show()
-        .map_err(|e| format!("通知发送失败: {}", e))?;
-    Ok(())
+    {
+        Ok(_) => {
+            debug!("通知已发送: {}", title);
+            Ok(())
+        }
+        Err(e) => {
+            let msg = format!("通知发送失败: {}", e);
+            error!("{}", msg);
+            Err(msg)
+        }
+    }
 }
 
 #[cfg(test)]

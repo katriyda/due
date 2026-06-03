@@ -41,3 +41,13 @@
 - **配置文件（Config）**：应用配置，TOML 格式
 - **提醒数据（Reminders）**：所有提醒数据，TOML 格式
 - **标准应用数据目录（App Data Directory）**：Windows `%APPDATA%\due\` 或 `%LOCALAPPDATA%\due\`
+
+### 日志（Logging）
+- **日志（Log）**：应用运行时的事件记录，用于调试和问题追踪
+- **日志级别（Log Level）**：日志的严重程度
+  - **error**：致命错误，操作失败且无法恢复
+  - **warn**：可恢复错误，操作失败但有降级方案
+  - **info**：关键业务事件，如提醒触发、添加、删除
+  - **debug**：调试信息，如时间计算、数据加载详情
+  - **trace**：详细追踪，如每次状态变化
+- **日志文件（Log File）**：持久化存储的日志记录，位于 `%APPDATA%\due\logs\due.log`

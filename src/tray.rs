@@ -1,3 +1,4 @@
+use log::{info, error};
 use muda::{Menu, MenuItem};
 use tray_icon::TrayIcon;
 
@@ -34,8 +35,13 @@ impl TrayManager {
             tooltip: Some("due - 提醒应用".to_string()),
             ..Default::default()
         })
-        .map_err(|e| format!("创建托盘图标失败: {}", e))?;
+        .map_err(|e| {
+            let msg = format!("创建托盘图标失败: {}", e);
+            error!("{}", msg);
+            msg
+        })?;
 
+        info!("系统托盘已创建");
         Ok(Self {
             _icon: icon,
             _menu: menu,

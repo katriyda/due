@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 
 use chrono::{NaiveDate, NaiveTime};
+use log::{info, error};
 use crate::notification;
 use crate::reminder::{self, Reminder, RepeatInterval};
 use crate::time;
@@ -22,6 +23,7 @@ impl ReminderStore {
         }
     }
 
+    #[cfg(test)]
     pub fn reminders(&self) -> std::cell::Ref<'_, Vec<Reminder>> {
         self.reminders.borrow()
     }
@@ -46,6 +48,7 @@ impl ReminderStore {
         r.next_trigger = Some(next);
 
         self.reminders.borrow_mut().push(r);
+        info!("提醒已添加: {}", title);
         self.persist();
     }
 
@@ -55,8 +58,10 @@ impl ReminderStore {
         if index >= reminders.len() {
             return Err(format!("索引越界: {} (共 {} 条)", index, reminders.len()));
         }
+        let title = reminders[index].title.clone();
         reminders.remove(index);
         drop(reminders);
+        info!("提醒已删除: {}", title);
         self.persist();
         Ok(())
     }
@@ -67,8 +72,11 @@ impl ReminderStore {
         if index >= reminders.len() {
             return Err(format!("索引越界: {} (共 {} 条)", index, reminders.len()));
         }
-        reminders[index].enabled = !reminders[index].enabled;
+        let title = reminders[index].title.clone();
+        let enabled = reminders[index].enabled;
+        reminders[index].enabled = !enabled;
         drop(reminders);
+        info!("提醒已{}: {}", if enabled { "禁用" } else { "启用" }, title);
         self.persist();
         Ok(())
     }
@@ -155,6 +163,7 @@ impl ReminderStore {
         r.daily_end = parse_optional_time(daily_end_str)?;
 
         drop(reminders);
+        info!("提醒已更新: {}", title);
         self.persist();
         Ok(())
     }
@@ -193,6 +202,7 @@ impl ReminderStore {
             if time::should_trigger_recurring(r, &now) {
                 let _ = notification::send(&r.title, &r.content);
                 time::update_after_trigger(r, &now);
+                info!("提醒触发: {}", r.title);
                 changed = true;
             }
         }
@@ -222,8 +232,10 @@ impl ReminderStore {
         }
     }
 
-    fn persist(&self) {
-        let _ = reminder::save_reminders(&self.dir, &self.reminders.borrow());
+    pub(crate) fn persist(&self) {
+        if let Err(e) = reminder::save_reminders(&self.dir, &self.reminders.borrow()) {
+            error!("保存提醒数据失败: {}", e);
+        }
     }
 }
 
@@ -500,5 +512,42 @@ mod tests {
         let reminders = store.reminders();
         assert!(reminders[0].next_trigger.is_some());
         assert!(reminders[0].next_trigger.unwrap() > chrono::NaiveDateTime::parse_from_str("2020-01-01 00:00", "%Y-%m-%d %H:%M").unwrap());
+    }
+
+    #[test]
+    fn add_logs_info_message() {
+        let dir = temp_dir("add_log");
+        let store = ReminderStore::new(dir.clone(), slint::Weak::default());
+
+        let records = crate::logging::setup_test_logger();
+        crate::logging::clear_test_records(&records);
+
+        store.add("喝水", "每小时喝一杯水", 3);
+
+        let records = records.lock().unwrap();
+        assert!(records.iter().any(|r| r.contains("提醒已添加: 喝水")), "should log '提醒已添加: 喝水', got: {:?}", *records);
+    }
+
+    #[test]
+    fn persist_logs_error_on_failure() {
+        // 创建一个文件阻止 reminders.toml 写入
+        let dir = temp_dir("persist_fail");
+        let reminders_path = dir.join("reminders.toml");
+        // 创建一个同名目录，这样文件写入会失败
+        std::fs::create_dir_all(&reminders_path).unwrap();
+
+        let store = ReminderStore::new(dir.clone(), slint::Weak::default());
+
+        let records = crate::logging::setup_test_logger();
+        crate::logging::clear_test_records(&records);
+
+        store.reminders.borrow_mut().push(Reminder::new("test", ""));
+        store.persist();
+
+        let records = records.lock().unwrap();
+        assert!(records.iter().any(|r| r.contains("保存提醒数据失败")), "should log '保存提醒数据失败', got: {:?}", *records);
+
+        // 清理
+        let _ = std::fs::remove_dir_all(&reminders_path);
     }
 }
