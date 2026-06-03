@@ -1,6 +1,5 @@
 mod config;
 mod notification;
-mod popup;
 mod reminder;
 mod time;
 mod tray;
@@ -19,6 +18,15 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    let config = match config::ensure_config_file(&dir) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("加载配置失败: {}", e);
+            config::AppConfig::default()
+        }
+    };
+    eprintln!("配置已加载: 通知方式={:?}, 默认延后={}分钟", config.notification_method, config.default_snooze_minutes);
 
     let mut initial_reminders = match reminder::load_reminders(&dir) {
         Ok(reminders) => reminders,

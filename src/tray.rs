@@ -43,6 +43,7 @@ impl TrayManager {
     }
 
     /// 获取菜单项数量
+    #[cfg(test)]
     pub fn menu_item_count(&self) -> usize {
         self._menu.items().len()
     }

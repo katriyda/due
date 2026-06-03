@@ -88,6 +88,7 @@ impl Reminder {
         }
     }
 
+    #[cfg(test)]
     pub fn with_repeat(self, interval: RepeatInterval) -> Self {
         Self {
             repeat: Some(interval),
@@ -95,6 +96,7 @@ impl Reminder {
         }
     }
 
+    #[cfg(test)]
     pub fn with_next_trigger(self, dt: NaiveDateTime) -> Self {
         Self {
             next_trigger: Some(dt),

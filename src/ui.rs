@@ -77,6 +77,7 @@ pub fn format_time(t: Option<NaiveTime>) -> String {
 }
 
 /// 添加新提醒
+#[cfg(test)]
 pub fn add_reminder(reminders: &mut Vec<Reminder>, title: &str, content: &str) {
     reminders.push(Reminder::new(title, content));
 }

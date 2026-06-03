@@ -25,15 +25,6 @@ impl Default for AppConfig {
     }
 }
 
-pub fn load_config(dir: &std::path::Path) -> AppConfig {
-    let path = dir.join(CONFIG_FILE);
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return AppConfig::default(),
-    };
-    toml::from_str(&content).unwrap_or_else(|_| AppConfig::default())
-}
-
 pub fn save_config(dir: &std::path::Path, config: &AppConfig) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create directory: {}", e))?;
     let toml_str = toml::to_string_pretty(config).map_err(|e| format!("Failed to serialize: {}", e))?;
@@ -81,7 +72,7 @@ mod tests {
         };
 
         super::save_config(&dir, &config).unwrap();
-        let loaded = super::load_config(&dir);
+        let loaded = super::ensure_config_file(&dir).unwrap();
 
         assert_eq!(loaded.notification_method, NotificationMethod::SystemNotification);
         assert_eq!(loaded.default_snooze_minutes, 30);
@@ -90,11 +81,11 @@ mod tests {
     }
 
     #[test]
-    fn load_config_returns_default_when_file_missing() {
+    fn ensure_config_file_returns_default_when_file_missing() {
         let dir = std::env::temp_dir().join("due_test_config_missing");
         let _ = std::fs::remove_dir_all(&dir);
 
-        let config = super::load_config(&dir);
+        let config = super::ensure_config_file(&dir).unwrap();
 
         assert_eq!(config, AppConfig::default());
     }
