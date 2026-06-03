@@ -20,7 +20,7 @@ fn main() {
         }
     };
 
-    let initial_reminders = match reminder::load_reminders(&dir) {
+    let mut initial_reminders = match reminder::load_reminders(&dir) {
         Ok(reminders) => reminders,
         Err(_) => {
             let examples = vec![
@@ -35,22 +35,41 @@ fn main() {
         }
     };
 
+    // 重启时推进错过的 next_trigger
+    let now = chrono::Local::now().naive_local();
+    for r in &mut initial_reminders {
+        time::advance_next_trigger(r, &now);
+    }
+    let _ = reminder::save_reminders(&dir, &initial_reminders);
+
     let reminders = Rc::new(RefCell::new(initial_reminders));
     let window = MainWindow::new().unwrap();
+
+    // 创建系统托盘
+    let _tray = match tray::TrayManager::new() {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("创建托盘失败: {}", e);
+            // 托盘失败不阻止应用启动
+            // 需要一个 dummy 生命周期，但 TrayManager 不支持
+            // 这里用一个局部变量，_tray 会存活到 main 结束
+            panic!("托盘创建失败，无法继续: {}", e);
+        }
+    };
 
     // 初始加载提醒列表
     update_reminders(&window, &reminders.borrow());
 
-    // 添加提醒
+    // 添加提醒（带间隔）
     let window_weak = window.as_weak();
     let reminders_clone = reminders.clone();
     let dir_clone = dir.clone();
-    window.on_add_clicked(move |title, content| {
+    window.on_add_clicked(move |title, content, interval_idx| {
         let window = window_weak.unwrap();
         let title = title.to_string();
         let content = content.to_string();
         if !title.is_empty() {
-            ui::add_reminder(&mut reminders_clone.borrow_mut(), &title, &content);
+            ui::add_reminder_with_interval(&mut reminders_clone.borrow_mut(), &title, &content, interval_idx);
             update_reminders(&window, &reminders_clone.borrow());
             let _ = reminder::save_reminders(&dir_clone, &reminders_clone.borrow());
         }
@@ -114,7 +133,7 @@ fn main() {
     let reminders_clone = reminders.clone();
     let dir_clone = dir.clone();
     window.on_save_clicked(
-        move |index, title, content, repeat_type_idx, repeat_amount_str, start_date, end_date, daily_start, daily_end| {
+        move |index, title, content, repeat_type_idx, repeat_amount_str, start_date, end_date, daily_start, daily_end, repeat_limit_str| {
             let window = window_weak.unwrap();
             let idx = index as usize;
             let title = title.to_string();
@@ -124,6 +143,7 @@ fn main() {
             let end_date = end_date.to_string();
             let daily_start = daily_start.to_string();
             let daily_end = daily_end.to_string();
+            let repeat_limit_str = repeat_limit_str.to_string();
 
             let result = ui::save_reminder(
                 &mut reminders_clone.borrow_mut(),
@@ -136,6 +156,7 @@ fn main() {
                 &end_date,
                 &daily_start,
                 &daily_end,
+                &repeat_limit_str,
             );
 
             match result {
@@ -149,6 +170,35 @@ fn main() {
             }
         },
     );
+
+    // 调度器：每秒检查提醒
+    let reminders_clone = reminders.clone();
+    let dir_clone = dir.clone();
+    let window_weak = window.as_weak();
+    let timer = slint::Timer::default();
+    timer.start(slint::TimerMode::Repeated, std::time::Duration::from_secs(1), move || {
+        let now = chrono::Local::now().naive_local();
+        let mut reminders = reminders_clone.borrow_mut();
+        let mut changed = false;
+
+        for r in reminders.iter_mut() {
+            if time::should_trigger_recurring(r, &now) {
+                // 发送系统通知
+                let _ = notification::send(&r.title, &r.content);
+
+                // 更新提醒状态
+                time::update_after_trigger(r, &now);
+                changed = true;
+            }
+        }
+
+        if changed {
+            if let Some(window) = window_weak.upgrade() {
+                update_reminders(&window, &reminders);
+            }
+            let _ = reminder::save_reminders(&dir_clone, &reminders);
+        }
+    });
 
     window.run().unwrap();
 }

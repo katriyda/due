@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -66,6 +66,8 @@ pub struct Reminder {
     pub repeat_limit: Option<u32>,
     #[serde(default)]
     pub repeat_count: u32,
+    #[serde(default)]
+    pub next_trigger: Option<NaiveDateTime>,
 }
 
 impl Reminder {
@@ -82,6 +84,7 @@ impl Reminder {
             daily_end: None,
             repeat_limit: None,
             repeat_count: 0,
+            next_trigger: None,
         }
     }
 
@@ -91,11 +94,19 @@ impl Reminder {
             ..self
         }
     }
+
+    pub fn with_next_trigger(self, dt: NaiveDateTime) -> Self {
+        Self {
+            next_trigger: Some(dt),
+            ..self
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Timelike;
 
     #[test]
     fn create_reminder_with_required_fields() {
@@ -181,6 +192,7 @@ completed = true
                 daily_end: None,
                 repeat_limit: None,
                 repeat_count: 0,
+                next_trigger: None,
             },
         ];
 
@@ -202,5 +214,62 @@ completed = true
             .with_repeat(RepeatInterval::Hours(1));
 
         assert_eq!(reminder.repeat, Some(RepeatInterval::Hours(1)));
+    }
+
+    #[test]
+    fn next_trigger_defaults_to_none() {
+        let reminder = Reminder::new("喝水", "每小时喝一杯水");
+
+        assert_eq!(reminder.next_trigger, None);
+    }
+
+    #[test]
+    fn next_trigger_can_be_set() {
+        let dt = NaiveDateTime::parse_from_str("2026-06-04 15:00", "%Y-%m-%d %H:%M").unwrap();
+        let reminder = Reminder::new("喝水", "每小时喝一杯水")
+            .with_next_trigger(dt);
+
+        assert_eq!(reminder.next_trigger, Some(dt));
+    }
+
+    #[test]
+    fn serialize_reminder_with_next_trigger() {
+        let dt = NaiveDateTime::parse_from_str("2026-06-04 15:00", "%Y-%m-%d %H:%M").unwrap();
+        let reminder = Reminder::new("喝水", "每小时喝一杯水")
+            .with_next_trigger(dt);
+        let toml_str = toml::to_string(&reminder).unwrap();
+
+        assert!(toml_str.contains("next_trigger"), "TOML 应包含 next_trigger 字段");
+        assert!(toml_str.contains("2026-06-04"), "TOML 应包含日期");
+    }
+
+    #[test]
+    fn deserialize_reminder_with_next_trigger() {
+        let toml_str = r#"
+title = "喝水"
+content = "每小时喝一杯水"
+enabled = true
+completed = false
+next_trigger = "2026-06-04T15:00:00"
+"#;
+        let reminder: Reminder = toml::from_str(toml_str).unwrap();
+
+        assert!(reminder.next_trigger.is_some());
+        let dt = reminder.next_trigger.unwrap();
+        assert_eq!(dt.hour(), 15);
+        assert_eq!(dt.minute(), 0);
+    }
+
+    #[test]
+    fn deserialize_old_data_without_next_trigger() {
+        let toml_str = r#"
+title = "喝水"
+content = "每小时喝一杯水"
+enabled = true
+completed = false
+"#;
+        let reminder: Reminder = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(reminder.next_trigger, None, "旧数据没有 next_trigger 应默认为 None");
     }
 }

@@ -17,11 +17,11 @@ export component MainWindow inherits Window {
     preferred-height: 600px;
 
     // 回调
-    callback add-clicked(string, string);
+    callback add-clicked(string, string, int);
     callback delete-clicked(int);
     callback toggle-enabled(int);
     callback select-reminder(int);
-    callback save-clicked(int, string, string, int, string, string, string, string, string);
+    callback save-clicked(int, string, string, int, string, string, string, string, string, string);
 
     // 列表数据
     in-out property <[ReminderItem]> reminders: [];
@@ -72,12 +72,18 @@ export component MainWindow inherits Window {
                         horizontal-stretch: 1;
                     }
 
+                    new-interval := ComboBox {
+                        width: 90px;
+                        model: ["5分钟", "15分钟", "30分钟", "1小时", "1天"];
+                        current-index: 2;
+                    }
+
                     Button {
                         text: "+";
                         width: 36px;
                         clicked => {
                             if (new-title.text != "") {
-                                root.add-clicked(new-title.text, "");
+                                root.add-clicked(new-title.text, "", new-interval.current-index);
                                 new-title.text = "";
                             }
                         }
@@ -367,6 +373,7 @@ export component MainWindow inherits Window {
                                     end-date-input.text,
                                     daily-start-input.text,
                                     daily-end-input.text,
+                                    root.repeat-type-index > 0 ? root.repeat-limit-value : "",
                                 );
                             }
                         }

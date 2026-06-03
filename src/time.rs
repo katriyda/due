@@ -1,4 +1,4 @@
-use chrono::{Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{Duration, Local, NaiveDateTime, NaiveTime};
 use crate::reminder::{Reminder, RepeatInterval};
 
 const FORMATS: &[&str] = &[
@@ -95,6 +95,46 @@ pub fn has_reached_limit(reminder: &Reminder) -> bool {
     false
 }
 
+/// 重启时将 next_trigger 推进到未来时间点（不补触发，只找下一个未来触发点）
+pub fn advance_next_trigger(reminder: &mut Reminder, now: &NaiveDateTime) {
+    let next = match reminder.next_trigger {
+        Some(n) => n,
+        None => return,
+    };
+
+    if next > *now {
+        return;
+    }
+
+    let interval = match &reminder.repeat {
+        Some(i) => i.clone(),
+        None => return,
+    };
+
+    let mut next = next;
+    while next <= *now {
+        next = next_trigger_time(&interval, &next);
+    }
+    reminder.next_trigger = Some(next);
+}
+
+/// 触发后更新提醒状态：更新 next_trigger、repeat_count，一次性提醒自动完成
+pub fn update_after_trigger(reminder: &mut Reminder, now: &NaiveDateTime) {
+    reminder.repeat_count += 1;
+
+    if let Some(limit) = reminder.repeat_limit {
+        if reminder.repeat_count >= limit {
+            reminder.completed = true;
+            reminder.next_trigger = None;
+            return;
+        }
+    }
+
+    if let Some(interval) = &reminder.repeat {
+        reminder.next_trigger = Some(next_trigger_time(interval, now));
+    }
+}
+
 /// 综合判断重复提醒是否应该触发
 pub fn should_trigger_recurring(reminder: &Reminder, now: &NaiveDateTime) -> bool {
     if !reminder.enabled || reminder.completed {
@@ -103,6 +143,12 @@ pub fn should_trigger_recurring(reminder: &Reminder, now: &NaiveDateTime) -> boo
 
     if has_reached_limit(reminder) {
         return false;
+    }
+
+    if let Some(next) = reminder.next_trigger {
+        if *now < next {
+            return false;
+        }
     }
 
     if !is_within_date_range(reminder, now) {
@@ -140,7 +186,7 @@ fn try_parse_chinese_time(input: &str) -> Option<NaiveTime> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{Datelike, Timelike};
+    use chrono::{Datelike, NaiveDate, Timelike};
 
     #[test]
     fn parse_standard_local_time() {
@@ -355,5 +401,145 @@ mod tests {
         let now = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
 
         assert!(should_trigger_recurring(&reminder, &now));
+    }
+
+    #[test]
+    fn should_not_trigger_when_next_trigger_in_future() {
+        let next = NaiveDateTime::parse_from_str("2026-06-03 16:00", "%Y-%m-%d %H:%M").unwrap();
+        let reminder = Reminder::new("喝水", "每小时喝一杯水")
+            .with_repeat(RepeatInterval::Hours(1))
+            .with_next_trigger(next);
+        let now = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+
+        assert!(!should_trigger_recurring(&reminder, &now));
+    }
+
+    #[test]
+    fn should_trigger_when_next_trigger_reached() {
+        let next = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+        let reminder = Reminder::new("喝水", "每小时喝一杯水")
+            .with_repeat(RepeatInterval::Hours(1))
+            .with_next_trigger(next);
+        let now = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+
+        assert!(should_trigger_recurring(&reminder, &now));
+    }
+
+    #[test]
+    fn should_trigger_when_next_trigger_past() {
+        let next = NaiveDateTime::parse_from_str("2026-06-03 14:00", "%Y-%m-%d %H:%M").unwrap();
+        let reminder = Reminder::new("喝水", "每小时喝一杯水")
+            .with_repeat(RepeatInterval::Hours(1))
+            .with_next_trigger(next);
+        let now = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+
+        assert!(should_trigger_recurring(&reminder, &now));
+    }
+
+    #[test]
+    fn update_after_trigger_sets_next_trigger() {
+        let mut reminder = Reminder::new("喝水", "每小时喝一杯水")
+            .with_repeat(RepeatInterval::Hours(1));
+        let now = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+
+        update_after_trigger(&mut reminder, &now);
+
+        assert_eq!(reminder.next_trigger, Some(NaiveDateTime::parse_from_str("2026-06-03 16:00", "%Y-%m-%d %H:%M").unwrap()));
+        assert_eq!(reminder.repeat_count, 1);
+        assert!(!reminder.completed);
+    }
+
+    #[test]
+    fn update_after_trigger_increments_count() {
+        let mut reminder = Reminder::new("喝水", "每小时喝一杯水")
+            .with_repeat(RepeatInterval::Hours(1));
+        reminder.repeat_count = 3;
+        let now = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+
+        update_after_trigger(&mut reminder, &now);
+
+        assert_eq!(reminder.repeat_count, 4);
+    }
+
+    #[test]
+    fn update_after_trigger_completes_when_limit_reached() {
+        let mut reminder = Reminder::new("喝水", "每小时喝一杯水")
+            .with_repeat(RepeatInterval::Hours(1));
+        reminder.repeat_limit = Some(1);
+        let now = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+
+        update_after_trigger(&mut reminder, &now);
+
+        assert!(reminder.completed);
+        assert_eq!(reminder.next_trigger, None);
+        assert_eq!(reminder.repeat_count, 1);
+    }
+
+    #[test]
+    fn update_after_trigger_one_time_reminder_auto_completes() {
+        let mut reminder = Reminder::new("买菜", "鸡蛋、牛奶")
+            .with_repeat(RepeatInterval::Minutes(1));
+        reminder.repeat_limit = Some(1);
+        let now = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+
+        update_after_trigger(&mut reminder, &now);
+
+        assert!(reminder.completed, "一次性提醒触发后应自动完成");
+        assert_eq!(reminder.next_trigger, None);
+    }
+
+    #[test]
+    fn advance_next_trigger_does_nothing_when_in_future() {
+        let next = NaiveDateTime::parse_from_str("2026-06-03 16:00", "%Y-%m-%d %H:%M").unwrap();
+        let mut reminder = Reminder::new("喝水", "每小时喝一杯水")
+            .with_repeat(RepeatInterval::Hours(1))
+            .with_next_trigger(next);
+        let now = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+
+        advance_next_trigger(&mut reminder, &now);
+
+        assert_eq!(reminder.next_trigger, Some(next));
+    }
+
+    #[test]
+    fn advance_next_trigger_skips_missed_triggers() {
+        // next_trigger was 15:00, now is 15:20, interval 30min → should advance to 15:30
+        let next = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+        let mut reminder = Reminder::new("喝水", "每半小时喝水")
+            .with_repeat(RepeatInterval::Minutes(30))
+            .with_next_trigger(next);
+        let now = NaiveDateTime::parse_from_str("2026-06-03 15:20", "%Y-%m-%d %H:%M").unwrap();
+
+        advance_next_trigger(&mut reminder, &now);
+
+        let expected = NaiveDateTime::parse_from_str("2026-06-03 15:30", "%Y-%m-%d %H:%M").unwrap();
+        assert_eq!(reminder.next_trigger, Some(expected));
+    }
+
+    #[test]
+    fn advance_next_trigger_skips_multiple_missed() {
+        // next_trigger was 15:00, now is 16:05, interval 30min → should advance to 16:30
+        let next = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+        let mut reminder = Reminder::new("喝水", "每半小时喝水")
+            .with_repeat(RepeatInterval::Minutes(30))
+            .with_next_trigger(next);
+        let now = NaiveDateTime::parse_from_str("2026-06-03 16:05", "%Y-%m-%d %H:%M").unwrap();
+
+        advance_next_trigger(&mut reminder, &now);
+
+        let expected = NaiveDateTime::parse_from_str("2026-06-03 16:30", "%Y-%m-%d %H:%M").unwrap();
+        assert_eq!(reminder.next_trigger, Some(expected));
+    }
+
+    #[test]
+    fn advance_next_trigger_does_nothing_without_repeat() {
+        let next = NaiveDateTime::parse_from_str("2026-06-03 15:00", "%Y-%m-%d %H:%M").unwrap();
+        let mut reminder = Reminder::new("喝水", "每小时喝一杯水")
+            .with_next_trigger(next);
+        let now = NaiveDateTime::parse_from_str("2026-06-03 16:00", "%Y-%m-%d %H:%M").unwrap();
+
+        advance_next_trigger(&mut reminder, &now);
+
+        assert_eq!(reminder.next_trigger, Some(next), "没有 repeat 的提醒不应推进");
     }
 }
