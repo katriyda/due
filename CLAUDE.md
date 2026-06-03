@@ -36,6 +36,7 @@ cmd /c "`"C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxili
 ```
 src/
 ├── main.rs          # 入口：加载数据目录，显示提醒列表
+├── config.rs        # AppConfig 模型 + TOML 配置（load_config / save_config / ensure_config_file）
 └── reminder.rs      # Reminder 模型 + TOML 存储（save_reminders / load_reminders / data_dir）
 ```
 
@@ -43,6 +44,7 @@ src/
 
 - 数据目录：`%APPDATA%\due\`（通过 `dirs::data_dir()` 获取）
 - 提醒文件：`reminders.toml`（TOML 格式，`[[reminders]]` 数组）
+- 配置文件：`config.toml`（TOML 格式，首次运行自动生成默认配置）
 - 配置格式：TOML
 
 ### 术语
