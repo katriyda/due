@@ -1,16 +1,7 @@
-mod config;
-mod logging;
-mod notification;
-mod reminder;
-mod store;
-mod time;
-mod tray;
-mod ui;
-
 use std::rc::Rc;
 use log::{info, warn, error, debug};
-
-slint::include_modules!();
+use due::{config, logging, reminder, store, time, tray, MainWindow};
+use slint::ComponentHandle;
 
 fn main() {
     // 初始化日志系统（在 data_dir() 之前，确保所有操作都能记录日志）

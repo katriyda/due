@@ -90,7 +90,7 @@ impl ReminderStore {
 
     /// 将编辑数据应用到指定提醒（可独立测试）
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn apply_edit_data(
+    pub fn apply_edit_data(
         &self,
         index: usize,
         title: &str,
