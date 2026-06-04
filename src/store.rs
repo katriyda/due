@@ -50,6 +50,7 @@ impl ReminderStore {
         self.reminders.borrow_mut().push(r);
         info!("提醒已添加: {}", title);
         self.persist();
+        self.refresh_ui();
     }
 
     /// 删除提醒
@@ -63,6 +64,11 @@ impl ReminderStore {
         drop(reminders);
         info!("提醒已删除: {}", title);
         self.persist();
+        // 重置选中索引，避免指向越界位置
+        if let Some(w) = self.window.upgrade() {
+            w.set_selected_index(-1);
+        }
+        self.refresh_ui();
         Ok(())
     }
 
@@ -78,25 +84,8 @@ impl ReminderStore {
         drop(reminders);
         info!("提醒已{}: {}", if enabled { "禁用" } else { "启用" }, title);
         self.persist();
+        self.refresh_ui();
         Ok(())
-    }
-
-    /// 从 window 编辑面板读取值并保存到指定提醒
-    pub fn save_edit(&self, index: usize) -> Result<(), String> {
-        let w = self.window.upgrade().ok_or("窗口已关闭")?;
-
-        self.apply_edit_data(
-            index,
-            &w.get_edit_title().to_string(),
-            &w.get_edit_content().to_string(),
-            w.get_repeat_type_index(),
-            &w.get_repeat_amount_value().to_string(),
-            &w.get_edit_start_date().to_string(),
-            &w.get_edit_end_date().to_string(),
-            &w.get_edit_daily_start().to_string(),
-            &w.get_edit_daily_end().to_string(),
-            &w.get_repeat_limit_value().to_string(),
-        )
     }
 
     /// 将编辑数据应用到指定提醒（可独立测试）
@@ -165,6 +154,7 @@ impl ReminderStore {
         drop(reminders);
         info!("提醒已更新: {}", title);
         self.persist();
+        self.refresh_ui();
         Ok(())
     }
 

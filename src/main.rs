@@ -89,10 +89,7 @@ fn main() {
     let store_clone = store.clone();
     window.on_delete_clicked(move |index| {
         debug!("用户点击删除提醒: index={}", index);
-        if store_clone.delete(index as usize).is_ok() {
-            // TODO: 需要通过 store 访问 window 来 set_selected_index(-1)
-            // 暂时由 select 回调处理
-        }
+        let _ = store_clone.delete(index as usize);
     });
 
     // 切换启用
@@ -112,9 +109,20 @@ fn main() {
     // 保存编辑
     let store_clone = store.clone();
     window.on_save_clicked(
-        move |index, _title, _content, _repeat_type_idx, _repeat_amount_str, _start_date, _end_date, _daily_start, _daily_end, _repeat_limit_str| {
+        move |index, title, content, repeat_type_idx, repeat_amount_str, start_date, end_date, daily_start, daily_end, repeat_limit_str| {
             debug!("用户点击保存编辑: index={}", index);
-            if let Err(e) = store_clone.save_edit(index as usize) {
+            if let Err(e) = store_clone.apply_edit_data(
+                index as usize,
+                &title.to_string(),
+                &content.to_string(),
+                repeat_type_idx,
+                &repeat_amount_str.to_string(),
+                &start_date.to_string(),
+                &end_date.to_string(),
+                &daily_start.to_string(),
+                &daily_end.to_string(),
+                &repeat_limit_str.to_string(),
+            ) {
                 error!("保存编辑失败: {}", e);
             }
         },
