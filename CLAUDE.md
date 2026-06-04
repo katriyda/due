@@ -10,9 +10,10 @@ due — Windows 桌面提醒应用，Rust + Slint GUI，后台托盘运行，TOM
 
 ```powershell
 cargo check          # 编译检查
-cargo test           # 运行全部测试
+cargo test           # 运行全部测试（76 单元 + 3 集成）
 cargo test <name>    # 运行单个测试
 cargo test reminder::  # 运行指定模块的测试
+cargo test --test integration_lifecycle  # 运行集成测试
 cargo run            # 运行应用
 ```
 
@@ -27,23 +28,32 @@ cargo run            # 运行应用
 
 ```
 src/
-├── main.rs          # 入口：加载数据，连接 Slint UI 回调，运行事件循环
+├── lib.rs           # 库 crate：暴露模块供集成测试使用，调用 slint::include_modules!()
+├── main.rs          # 二进制 crate 入口：使用 due:: 前缀引用模块，连接 UI 回调，运行事件循环
 ├── reminder.rs      # Reminder 模型 + TOML 存储（save_reminders / load_reminders / data_dir）
 ├── config.rs        # AppConfig 模型 + TOML 配置
-├── ui.rs            # UI 数据转换（ReminderItem）+ 编辑/添加/删除/保存逻辑
+├── store.rs         # ReminderStore：集中状态管理（CRUD + 调度 + UI 刷新）
+├── ui.rs            # UI 数据转换（ReminderItem）+ 格式化函数
 ├── time.rs          # 时间解析（本地/相对/中文）+ 重复触发判断
-├── popup.rs         # 弹窗操作（Dismiss / Snooze / Complete）
 ├── notification.rs  # Windows 系统通知（notify-rust）
-└── tray.rs          # 系统托盘（tray-icon + muda 菜单）
+├── tray.rs          # 系统托盘（tray-icon + muda 菜单）
+└── logging.rs       # fern 日志系统 + 测试用日志捕获
 ui/
 └── main.slint       # Slint GUI 定义（主窗口布局、编辑面板、回调声明）
 build.rs             # slint_build::compile("ui/main.slint")
+tests/
+└── integration_lifecycle.rs  # 集成测试：Reminder 完整生命周期
 ```
 
 ### 数据流
 
-Reminder 模型 (`reminder.rs`) → UI 转换 (`ui::to_reminder_items`) → Slint 渲染 (`main.slint`)
-用户操作 → Slint 回调 → `ui.rs` 逻辑 → `reminder.rs` 持久化 → 刷新 UI
+Reminder 模型 (`reminder.rs`) → ReminderStore (`store.rs`) → UI 转换 (`ui::to_reminder_items`) → Slint 渲染
+用户操作 → Slint 回调 → Store 方法 → 持久化 + 刷新 UI
+
+### 库 crate 模式
+
+`lib.rs` 暴露所有模块，`main.rs` 使用 `due::` 前缀引用。集成测试（`tests/`）通过 `due::` 访问公共 API。
+Store 的 `apply_edit_data` 为 `pub`，`reminders()` 访问器仅在 `#[cfg(test)]` 下可用。
 
 ### 存储
 
