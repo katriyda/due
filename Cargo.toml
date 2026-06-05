@@ -8,12 +8,19 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5"
-notify-rust = "4"
+notify-rust = { version = "4", default-features = false }
 tray-icon = "0.19"
 muda = "0.15"
-slint = "1.9"
+slint = { version = "1.9", default-features = false, features = ["backend-winit", "renderer-software", "software-renderer-systemfonts", "std", "compat-1-2"] }
 log = "0.4"
 fern = "0.7"
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1
+opt-level = "s"
+panic = "abort"
 
 [dev-dependencies]
 tempfile = "3"
