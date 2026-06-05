@@ -1,6 +1,9 @@
 use log::{info, error};
 use muda::{Menu, MenuItem};
-use tray_icon::TrayIcon;
+use tray_icon::{Icon, TrayIcon};
+
+const ICON_SIZE: u32 = 32;
+const ICON_RGBA: &[u8] = include_bytes!("../assets/icon.rgba");
 
 /// 系统托盘管理器
 pub struct TrayManager {
@@ -29,8 +32,11 @@ impl TrayManager {
         menu.append(&quit_item)
             .map_err(|e| format!("添加菜单项失败: {}", e))?;
 
+        let icon = Icon::from_rgba(ICON_RGBA.to_vec(), ICON_SIZE, ICON_SIZE)
+            .map_err(|e| format!("加载托盘图标失败: {}", e))?;
+
         let icon = TrayIcon::new(tray_icon::TrayIconAttributes {
-            icon: None,
+            icon: Some(icon),
             menu: Some(Box::new(menu.clone())),
             tooltip: Some("due - 提醒应用".to_string()),
             ..Default::default()
